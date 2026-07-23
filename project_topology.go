@@ -26,8 +26,9 @@ type ProjectAnimationDeleteReport struct {
 //
 // The expected animation name must identify the final map entry, so stale
 // agent plans fail closed. Duplicate leaf names are allowed because this API
-// selects by terminal position, not by name lookup. Deleting the only animation
-// leaves a valid terminal empty map. The input document is never mutated.
+// selects by terminal position, not by name lookup. At least one animation is
+// retained because an empty map cannot be rediscovered without broader Kryo
+// root context. The input document is never mutated.
 func DeleteLastProjectAnimation(
 	document *ProjectDocument,
 	expectedAnimation string,
@@ -44,11 +45,11 @@ func DeleteLastProjectAnimation(
 	if err != nil {
 		return nil, ProjectAnimationDeleteReport{}, err
 	}
-	if directory.Count == 0 || len(directory.Records) == 0 {
+	if directory.Count < 2 || len(directory.Records) < 2 {
 		return nil, ProjectAnimationDeleteReport{},
 			&ParseError{
-				Code: ErrInvalidProject,
-				Msg:  "project animation map is empty",
+				Code: ErrInvalidInput,
+				Msg:  "cannot delete the only project animation",
 			}
 	}
 	last := directory.Records[len(directory.Records)-1]

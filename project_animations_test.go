@@ -48,30 +48,6 @@ func TestDiscoverProjectAnimationsRejectsOldLayout(t *testing.T) {
 	}
 }
 
-func TestDiscoverProjectAnimationsAcceptsTerminalEmptyMap(t *testing.T) {
-	payload := append([]byte{}, modernAnimationHeaderPrefix...)
-	payload = append(payload, 0x00)
-	payload = append(payload, modernAnimationHeaderSuffix...)
-	payload = append(payload, 0x09)
-	payload = append(payload, modernAnimationHeaderTail...)
-
-	directory, err := DiscoverProjectAnimations(payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if directory.Count != 0 ||
-		directory.Records == nil ||
-		len(directory.Records) != 0 {
-		t.Fatalf("directory = %#v", directory)
-	}
-
-	if _, err := DiscoverProjectAnimations(
-		append(append([]byte{}, payload...), 0x55),
-	); err == nil {
-		t.Fatal("expected non-terminal empty map rejection")
-	}
-}
-
 func TestDiscoverProjectAnimationsKeepsDuplicateLeafNames(t *testing.T) {
 	payload := append([]byte{}, modernAnimationHeaderPrefix...)
 	payload = append(payload, 0x02)

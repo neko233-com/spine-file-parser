@@ -54,6 +54,11 @@ func TestDeleteLastProjectAnimationRejectsUnsafeDeletion(t *testing.T) {
 			animation: "idle",
 		},
 		{
+			name:      "only animation",
+			payload:   projectAnimationPayloadForDeleteTest(1),
+			animation: "idle",
+		},
+		{
 			name:      "missing",
 			payload:   projectAnimationPayloadForDeleteTest(2),
 			animation: "missing",
@@ -78,30 +83,6 @@ func TestDeleteLastProjectAnimationRejectsUnsafeDeletion(t *testing.T) {
 				t.Fatal("failed deletion mutated input")
 			}
 		})
-	}
-}
-
-func TestDeleteOnlyProjectAnimationLeavesEmptyMap(t *testing.T) {
-	payload := projectAnimationPayloadForDeleteTest(1)
-	deleted, report, err := DeleteLastProjectAnimation(
-		&ProjectDocument{Payload: payload},
-		"idle",
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if report.PreviousCount != 1 || report.Count != 0 {
-		t.Fatalf("report = %#v", report)
-	}
-	directory, err := DiscoverProjectAnimations(deleted.Payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if directory.Count != 0 || len(directory.Records) != 0 {
-		t.Fatalf("directory = %#v", directory)
-	}
-	if _, _, err := DeleteLastProjectAnimation(deleted, "idle"); err == nil {
-		t.Fatal("expected empty animation map rejection")
 	}
 }
 

@@ -177,7 +177,8 @@ patched, report, err := spineparser.DeleteLastProjectAnimation(
 )
 ```
 
-仅支持已验证的现代 `kryo-animation-map-v1`，且只能删除动画表最后一项。
+仅支持已验证的现代 `kryo-animation-map-v1`，且只能删除动画表最后一项；
+至少保留一个动画。
 函数同步更新 map count，并逐字节验证所有保留动画记录；输入 `document` 不变。
 非末项动画、关键帧或时间线的增删仍需完整对象图重编号，当前明确拒绝。
 

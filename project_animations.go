@@ -41,7 +41,7 @@ func DiscoverProjectAnimations(payload []byte) (*ProjectAnimationDirectory, erro
 			continue
 		}
 		count, cursor, ok := readPositiveVarint(payload, offset+len(modernAnimationHeaderPrefix))
-		if !ok || count > 10_000 {
+		if !ok || count < 1 || count > 10_000 {
 			continue
 		}
 		if cursor+len(modernAnimationHeaderSuffix)+1+len(modernAnimationHeaderTail) > len(payload) ||
@@ -61,18 +61,6 @@ func DiscoverProjectAnimations(payload []byte) (*ProjectAnimationDirectory, erro
 			continue
 		}
 		firstRecord := cursor + len(modernAnimationHeaderTail)
-		if count == 0 {
-			if firstRecord != len(payload) {
-				continue
-			}
-			candidates = append(candidates, ProjectAnimationDirectory{
-				Format:       "kryo-animation-map-v1",
-				HeaderOffset: offset,
-				Count:        0,
-				Records:      []ProjectAnimationRecord{},
-			})
-			continue
-		}
 		records := scanProjectAnimationRecords(payload, firstRecord, count)
 		if len(records) != count {
 			continue
