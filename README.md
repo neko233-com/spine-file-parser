@@ -9,6 +9,7 @@ Pure Go Spine 文件库。零第三方依赖，零 Spine Editor 进程依赖。
 - 自动解析现代 `.spine` 骨骼名、对象偏移、原始父对象 token 和 Kryo wire reference。
 - 语义解析及修改现代 `.spine` rotate/translate/scale/shear 时间线。
 - 语义解析及重定时现代 `.spine` slot attachment 时间线。
+- 解析并重定时现代 `.spine` event 时间线，保留事件值原始字节。
 - 解析/序列化 `.skel` header，保留未知 payload。
 - 解析/序列化 Spine JSON，保留未知字段。
 - Spine JSON 深度分析、引用验证、动画生成。
@@ -184,6 +185,33 @@ patched, report, err := spineparser.PatchProjectSlotAttachmentFrames(
 
 Attachment 对象名称引用尚未猜测；当前只安全修改已有 key 的帧，保持对象数量
 和引用不变。
+
+Event 关键帧：
+
+```go
+timelines, err := spineparser.DiscoverProjectEventTimelines(
+	document.Payload,
+	"run",
+)
+timeline := timelines.Timelines[0]
+patched, report, err := spineparser.PatchProjectEventFrames(
+	document,
+	spineparser.ProjectEventPatch{
+		Animation:       "run",
+		TargetAnimation: "run-agent",
+		Edits: []spineparser.ProjectEventFrameEdit{{
+			TimelineReference: timeline.TimelineReference,
+			KeyReference:      timeline.KeyReference,
+			TimelineOffset:    timeline.Offset,
+			KeyIndex:          0,
+			From:              8,
+			To:                9,
+		}},
+	},
+)
+```
+
+当前只修改已有 event key 的帧；事件定义、名称、参数和未知字段逐字节保留。
 
 末尾动画删除：
 
