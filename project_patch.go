@@ -158,16 +158,23 @@ func PatchProjectAnimationFloat32(
 
 func projectAnimationRegion(payload []byte, animation, endBefore string) (int, int, error) {
 	if directory, err := DiscoverProjectAnimations(payload); err == nil {
-		var selected *ProjectAnimationRecord
+		matches := make([]ProjectAnimationRecord, 0, 1)
 		for index := range directory.Records {
 			if directory.Records[index].Name == animation {
-				selected = &directory.Records[index]
-				break
+				matches = append(matches, directory.Records[index])
 			}
 		}
-		if selected == nil {
+		if len(matches) == 0 {
 			return 0, 0, fmt.Errorf("animation not found: %s", animation)
 		}
+		if len(matches) != 1 {
+			return 0, 0, fmt.Errorf(
+				"animation name is ambiguous: %s matched %d records",
+				animation,
+				len(matches),
+			)
+		}
+		selected := matches[0]
 		if strings.TrimSpace(endBefore) == "" {
 			return selected.Offset, selected.EndOffset, nil
 		}

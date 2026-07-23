@@ -47,3 +47,25 @@ func TestDiscoverProjectAnimationsRejectsOldLayout(t *testing.T) {
 		t.Fatal("expected unsupported layout error")
 	}
 }
+
+func TestDiscoverProjectAnimationsKeepsDuplicateLeafNames(t *testing.T) {
+	payload := append([]byte{}, modernAnimationHeaderPrefix...)
+	payload = append(payload, 0x02)
+	payload = append(payload, modernAnimationHeaderSuffix...)
+	payload = append(payload, 0x09)
+	payload = append(payload, modernAnimationHeaderTail...)
+	for range 2 {
+		payload = append(payload, kryoASCIIForTest("hooray")...)
+		payload = append(payload, modernAnimationValuePrefix...)
+		payload = append(payload, 0x00)
+	}
+	directory, err := DiscoverProjectAnimations(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if directory.Count != 2 ||
+		directory.Records[0].Name != "hooray" ||
+		directory.Records[1].Name != "hooray" {
+		t.Fatalf("directory = %#v", directory)
+	}
+}

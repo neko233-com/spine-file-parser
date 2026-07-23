@@ -93,7 +93,6 @@ func scanProjectAnimationRecords(
 	count int,
 ) []ProjectAnimationRecord {
 	records := make([]ProjectAnimationRecord, 0, count)
-	seen := make(map[string]struct{}, count)
 	for offset := firstOffset; offset < len(payload) && len(records) < count; offset++ {
 		if offset != firstOffset && isUnterminatedASCII(payload[offset-1]) {
 			continue
@@ -103,10 +102,6 @@ func scanProjectAnimationRecords(
 			!bytes.Equal(payload[end:end+len(modernAnimationValuePrefix)], modernAnimationValuePrefix) {
 			continue
 		}
-		if _, exists := seen[name]; exists {
-			continue
-		}
-		seen[name] = struct{}{}
 		records = append(records, ProjectAnimationRecord{Name: name, Offset: offset})
 		offset = end + len(modernAnimationValuePrefix) - 1
 	}
