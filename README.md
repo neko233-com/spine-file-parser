@@ -52,7 +52,8 @@ patched, report, err := spineparser.PatchProjectAnimationFloat32(
 )
 ```
 
-操作长度不变、不修改对象引用。动画边界或匹配数量不符时失败。
+关键帧编辑不修改对象引用；重命名只替换 Kryo ASCII 字符串。
+动画边界或匹配数量不符时失败。
 输入 `document` 永不被修改。
 
 ## `.skel`
