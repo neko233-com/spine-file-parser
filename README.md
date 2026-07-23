@@ -6,7 +6,7 @@ Pure Go Spine 文件库。零第三方依赖，零 Spine Editor 进程依赖。
 - 无损解包/封包 `.spine` raw-DEFLATE payload。
 - fail-closed 修改指定动画记录内大端 float32 关键帧。
 - 自动解析现代 `.spine` 动画表、数量、名称和记录边界。
-- 自动解析现代 `.spine` 骨骼名、对象偏移和原始父对象 token。
+- 自动解析现代 `.spine` 骨骼名、对象偏移、原始父对象 token 和 Kryo wire reference。
 - 语义解析及修改现代 `.spine` rotate/translate/scale/shear 时间线。
 - 语义解析及重定时现代 `.spine` slot attachment 时间线。
 - 解析/序列化 `.skel` header，保留未知 payload。
@@ -67,6 +67,18 @@ for _, animation := range directory.Records {
 	fmt.Println(animation.Name, animation.Offset, animation.EndOffset)
 }
 ```
+
+骨骼引用：
+
+```go
+bones, err := spineparser.DiscoverProjectBones(document.Payload)
+reference, ok := bones.WireReferenceByName("front-arm")
+name, ok := bones.BoneNameByWireReference(reference)
+fmt.Println(bones.ReferencesComplete, reference, name)
+```
+
+`ReferencesComplete=false` 表示复杂对象图未能全部证明；调用方必须 fail closed，
+不能按骨骼数组索引猜测动画引用。
 
 Rotate 时间线：
 

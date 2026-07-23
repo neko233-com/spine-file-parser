@@ -10,19 +10,23 @@ var projectBoneTablePrefix = []byte{0x0f, 0x01}
 // ProjectBoneRecord identifies one bone object in project serialization order.
 // ParentToken is the raw Kryo parent object token: null, new object, or ref.
 type ProjectBoneRecord struct {
-	Name         string `json:"name"`
-	Offset       int    `json:"offset"`
-	ParentToken  int    `json:"parentToken"`
-	NameEncoding string `json:"nameEncoding"`
+	Name          string `json:"name"`
+	Offset        int    `json:"offset"`
+	ParentToken   int    `json:"parentToken"`
+	WireReference int    `json:"wireReference,omitempty"`
+	NameEncoding  string `json:"nameEncoding"`
 }
 
-// ProjectBoneDirectory contains directly decoded modern project bone names.
+// ProjectBoneDirectory contains directly decoded modern project bone names
+// and proven Kryo wire references. ReferencesComplete is false when only the
+// leading directly serialized references could be established safely.
 type ProjectBoneDirectory struct {
-	Format       string              `json:"format"`
-	HeaderOffset int                 `json:"headerOffset"`
-	ClassID      int                 `json:"classId"`
-	Count        int                 `json:"count"`
-	Records      []ProjectBoneRecord `json:"records"`
+	Format             string              `json:"format"`
+	HeaderOffset       int                 `json:"headerOffset"`
+	ClassID            int                 `json:"classId"`
+	Count              int                 `json:"count"`
+	ReferencesComplete bool                `json:"referencesComplete"`
+	Records            []ProjectBoneRecord `json:"records"`
 }
 
 // DiscoverProjectBones decodes bone names, object offsets, and parent
@@ -59,13 +63,23 @@ func DiscoverProjectBones(payload []byte) (*ProjectBoneDirectory, error) {
 			!uniqueProjectBoneNames(records) {
 			continue
 		}
-		candidates = append(candidates, ProjectBoneDirectory{
+		directory := ProjectBoneDirectory{
 			Format:       "kryo-bone-table-v1",
 			HeaderOffset: headerOffset,
 			ClassID:      classID,
 			Count:        count,
 			Records:      records,
-		})
+		}
+		references, complete := resolveProjectBoneReferences(
+			payload,
+			cursor,
+			records,
+		)
+		for index := range directory.Records {
+			directory.Records[index].WireReference = references[index]
+		}
+		directory.ReferencesComplete = complete
+		candidates = append(candidates, directory)
 	}
 	if len(candidates) == 0 {
 		return nil, &ParseError{
@@ -80,6 +94,39 @@ func DiscoverProjectBones(payload []byte) (*ProjectBoneDirectory, error) {
 		}
 	}
 	return &candidates[0], nil
+}
+
+// WireReferenceByName resolves a bone name to the stable Kryo object
+// reference used by animation timelines. The boolean is false when the bone
+// does not exist or its reference could not be proved from the project.
+func (directory *ProjectBoneDirectory) WireReferenceByName(
+	name string,
+) (int, bool) {
+	if directory == nil {
+		return 0, false
+	}
+	for _, record := range directory.Records {
+		if record.Name == name && record.WireReference > 0 {
+			return record.WireReference, true
+		}
+	}
+	return 0, false
+}
+
+// BoneNameByWireReference resolves an animation timeline's Kryo object
+// reference back to the project bone name.
+func (directory *ProjectBoneDirectory) BoneNameByWireReference(
+	reference int,
+) (string, bool) {
+	if directory == nil || reference < 1 {
+		return "", false
+	}
+	for _, record := range directory.Records {
+		if record.WireReference == reference {
+			return record.Name, true
+		}
+	}
+	return "", false
 }
 
 func scanProjectBoneRecords(
