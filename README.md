@@ -50,12 +50,40 @@ const result = await exportSpineProject("./character.spine", {
   editorVersion: "4.3.xx"
 });
 
+console.log(result.outputDirectory);
+console.log(result.artifacts);
+
 for (const document of result.documents) {
   console.log(document.fileName);
   console.log(document.parsed.data.bones);
   console.log(document.parsed.data.animations);
 }
 ```
+
+Default output uses a unique OS temporary directory and is intentionally kept
+for manual troubleshooting:
+
+```text
+spine-file-parser-<random>/
+├─ character.json
+└─ diagnostics/
+   ├─ character.inspection.json
+   ├─ character.strings.txt
+   ├─ character.decoded.bin
+   └─ character.spine-cli.log
+```
+
+Inspect without launching Spine:
+
+```ts
+import { inspectSpineProjectFile } from "spine-file-parser/node";
+
+const result = await inspectSpineProjectFile("./character.spine");
+console.log(result.outputDirectory);
+```
+
+Pass `outputDirectory` to use a known folder, or
+`writeDecodedBinary: false` to omit the decompressed binary artifact.
 
 Use `SPINE_EXECUTABLE` instead of passing `executable` in every call:
 

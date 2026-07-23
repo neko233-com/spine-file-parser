@@ -1,18 +1,55 @@
 import { spawn } from "node:child_process";
-import { readFile, readdir, rm } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, extname, join, resolve } from "node:path";
-import { mkdtemp } from "node:fs/promises";
+import { basename, extname, join, parse, resolve } from "node:path";
 
-import { inspectSpineProject, parseSpineJson } from "./index";
+import {
+  decodeSpineProject,
+  inspectSpineProject,
+  parseSpineJson
+} from "./index";
 import type {
+  InspectProjectOptions,
   ParsedSpineJson,
   SpineProjectInspection
 } from "./index";
 
 export * from "./index";
 
-export interface ExportSpineProjectOptions {
+export interface InspectSpineProjectFileOptions extends InspectProjectOptions {
+  /**
+   * Output directory. A unique OS temporary directory is used by default.
+   */
+  outputDirectory?: string;
+  /**
+   * Write the decompressed private project stream for binary inspection.
+   * @default true
+   */
+  writeDecodedBinary?: boolean;
+}
+
+export interface SpineProjectDiagnosticArtifacts {
+  directory: string;
+  inspectionPath: string;
+  stringsPath: string;
+  decodedBinaryPath?: string;
+  cliLogPath?: string;
+}
+
+export interface InspectSpineProjectFileResult {
+  inspection: SpineProjectInspection;
+  outputDirectory: string;
+  artifacts: SpineProjectDiagnosticArtifacts;
+}
+
+export interface ExportSpineProjectOptions
+  extends InspectSpineProjectFileOptions {
   /**
    * Spine CLI executable. Defaults to SPINE_EXECUTABLE, then Spine.com on
    * Windows or Spine elsewhere.
@@ -22,10 +59,6 @@ export interface ExportSpineProjectOptions {
    * Existing Spine export settings JSON. Defaults to Spine's `json` preset.
    */
   exportSettings?: string;
-  /**
-   * Existing output directory. A temporary directory is used by default.
-   */
-  outputDirectory?: string;
   /**
    * Editor version passed to `--update`, for example `4.2.xx`.
    */
@@ -47,7 +80,9 @@ export interface ExportSpineProjectResult {
   inspection: SpineProjectInspection;
   documents: ExportedSpineDocument[];
   outputDirectory: string;
+  artifacts: SpineProjectDiagnosticArtifacts;
   stdout: string;
+  stderr: string;
 }
 
 interface ProcessResult {
@@ -111,16 +146,126 @@ function run(
   });
 }
 
+async function prepareOutputDirectory(
+  requestedDirectory?: string
+): Promise<string> {
+  if (requestedDirectory) {
+    const directory = resolve(requestedDirectory);
+    await mkdir(directory, { recursive: true });
+    return directory;
+  }
+  return mkdtemp(join(tmpdir(), "spine-file-parser-"));
+}
+
+async function writeInspectionArtifacts(
+  absoluteProjectPath: string,
+  outputDirectory: string,
+  inspection: SpineProjectInspection,
+  source: Uint8Array,
+  options: InspectSpineProjectFileOptions
+): Promise<SpineProjectDiagnosticArtifacts> {
+  const directory = join(outputDirectory, "diagnostics");
+  await mkdir(directory, { recursive: true });
+  const stem = parse(absoluteProjectPath).name;
+  const inspectionPath = join(directory, `${stem}.inspection.json`);
+  const stringsPath = join(directory, `${stem}.strings.txt`);
+  const writeDecodedBinary = options.writeDecodedBinary ?? true;
+  const decodedBinaryPath = writeDecodedBinary
+    ? join(directory, `${stem}.decoded.bin`)
+    : undefined;
+
+  await Promise.all([
+    writeFile(
+      inspectionPath,
+      `${JSON.stringify(
+        {
+          sourcePath: absoluteProjectPath,
+          generatedAt: new Date().toISOString(),
+          inspection
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    ),
+    writeFile(
+      stringsPath,
+      inspection.strings.length > 0
+        ? `${inspection.strings.join("\n")}\n`
+        : "",
+      "utf8"
+    ),
+    ...(decodedBinaryPath
+      ? [
+          writeFile(
+            decodedBinaryPath,
+            decodeSpineProject(source, {
+              ...(options.maxUncompressedBytes === undefined
+                ? {}
+                : {
+                    maxUncompressedBytes:
+                      options.maxUncompressedBytes
+                  })
+            })
+          )
+        ]
+      : [])
+  ]);
+
+  return {
+    directory,
+    inspectionPath,
+    stringsPath,
+    ...(decodedBinaryPath === undefined ? {} : { decodedBinaryPath })
+  };
+}
+
+export async function inspectSpineProjectFile(
+  projectPath: string,
+  options: InspectSpineProjectFileOptions = {}
+): Promise<InspectSpineProjectFileResult> {
+  const absoluteProjectPath = resolve(projectPath);
+  const source = await readFile(absoluteProjectPath);
+  const inspection = inspectSpineProject(source, {
+    ...(options.maxUncompressedBytes === undefined
+      ? {}
+      : { maxUncompressedBytes: options.maxUncompressedBytes }),
+    ...(options.maxStrings === undefined
+      ? {}
+      : { maxStrings: options.maxStrings })
+  });
+  const outputDirectory = await prepareOutputDirectory(
+    options.outputDirectory
+  );
+  const artifacts = await writeInspectionArtifacts(
+    absoluteProjectPath,
+    outputDirectory,
+    inspection,
+    source,
+    options
+  );
+
+  return { inspection, outputDirectory, artifacts };
+}
+
 export async function exportSpineProject(
   projectPath: string,
   options: ExportSpineProjectOptions = {}
 ): Promise<ExportSpineProjectResult> {
   const absoluteProjectPath = resolve(projectPath);
-  const inspection = inspectSpineProject(await readFile(absoluteProjectPath));
-  const ownsOutputDirectory = options.outputDirectory === undefined;
-  const outputDirectory = ownsOutputDirectory
-    ? await mkdtemp(join(tmpdir(), "spine-file-parser-"))
-    : resolve(options.outputDirectory!);
+  const inspected = await inspectSpineProjectFile(
+    absoluteProjectPath,
+    options
+  );
+  const { inspection, outputDirectory } = inspected;
+  const cliLogPath = join(
+    inspected.artifacts.directory,
+    `${parse(absoluteProjectPath).name}.spine-cli.log`
+  );
+  const artifacts: SpineProjectDiagnosticArtifacts = {
+    ...inspected.artifacts,
+    cliLogPath
+  };
   const executable =
     options.executable ??
     process.env.SPINE_EXECUTABLE ??
@@ -146,6 +291,18 @@ export async function exportSpineProject(
 
   try {
     const result = await run(executable, args, timeoutMs);
+    await writeFile(
+      cliLogPath,
+      [
+        "# stdout",
+        result.stdout.trimEnd(),
+        "",
+        "# stderr",
+        result.stderr.trimEnd(),
+        ""
+      ].join("\n"),
+      "utf8"
+    );
     const entries = await readdir(outputDirectory, { withFileTypes: true });
     const jsonFiles = entries
       .filter(
@@ -176,12 +333,19 @@ export async function exportSpineProject(
       inspection,
       documents,
       outputDirectory,
-      stdout: result.stdout
+      artifacts,
+      stdout: result.stdout,
+      stderr: result.stderr
     };
   } catch (error) {
-    if (ownsOutputDirectory) {
-      await rm(outputDirectory, { recursive: true, force: true });
-    }
-    throw error;
+    await writeFile(
+      cliLogPath,
+      `# error\n${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,
+      "utf8"
+    );
+    throw new Error(
+      `Spine export failed. Diagnostic output kept at ${outputDirectory}.`,
+      { cause: error }
+    );
   }
 }

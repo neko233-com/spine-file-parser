@@ -1,6 +1,6 @@
 {
   "name": "spine-file-parser",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Inspect Spine .spine project files and export them to typed JSON through the official Spine CLI.",
   "keywords": [
     "spine",
