@@ -42,7 +42,13 @@ func TestDiscoverAndPatchProjectSlotAttachmentTimelines(t *testing.T) {
 			Animation:       "blink",
 			TargetAnimation: "blink-agent",
 			Edits: []ProjectSlotAttachmentFrameEdit{
-				{SlotReference: 14, KeyIndex: 1, From: 16, To: 18},
+				{
+					SlotReference:     14,
+					TimelineReference: 300,
+					KeyIndex:          1,
+					From:              16,
+					To:                18,
+				},
 			},
 		},
 	)
@@ -91,7 +97,13 @@ func TestPatchProjectSlotAttachmentFramesRejectsOrderChange(t *testing.T) {
 		ProjectSlotAttachmentPatch{
 			Animation: "blink",
 			Edits: []ProjectSlotAttachmentFrameEdit{
-				{SlotReference: 14, KeyIndex: 1, From: 16, To: 13},
+				{
+					SlotReference:     14,
+					TimelineReference: 300,
+					KeyIndex:          1,
+					From:              16,
+					To:                13,
+				},
 			},
 		},
 	)

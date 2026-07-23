@@ -91,10 +91,11 @@ func DiscoverProjectSlotAttachmentTimelines(
 
 // ProjectSlotAttachmentFrameEdit retimes one existing attachment key.
 type ProjectSlotAttachmentFrameEdit struct {
-	SlotReference int     `json:"slotReference"`
-	KeyIndex      int     `json:"keyIndex"`
-	From          float32 `json:"from"`
-	To            float32 `json:"to"`
+	SlotReference     int     `json:"slotReference"`
+	TimelineReference int     `json:"timelineReference"`
+	KeyIndex          int     `json:"keyIndex"`
+	From              float32 `json:"from"`
+	To                float32 `json:"to"`
 }
 
 // ProjectSlotAttachmentPatch controls attachment-key retiming and optional
@@ -107,11 +108,12 @@ type ProjectSlotAttachmentPatch struct {
 
 // ProjectSlotAttachmentFrameChange reports one exact attachment-key edit.
 type ProjectSlotAttachmentFrameChange struct {
-	SlotReference int     `json:"slotReference"`
-	KeyIndex      int     `json:"keyIndex"`
-	From          float32 `json:"from"`
-	To            float32 `json:"to"`
-	Offset        int     `json:"offset"`
+	SlotReference     int     `json:"slotReference"`
+	TimelineReference int     `json:"timelineReference"`
+	KeyIndex          int     `json:"keyIndex"`
+	From              float32 `json:"from"`
+	To                float32 `json:"to"`
+	Offset            int     `json:"offset"`
 }
 
 // ProjectSlotAttachmentPatchReport is safe to inspect before serialization.
@@ -144,10 +146,18 @@ func PatchProjectSlotAttachmentFrames(
 	if err != nil {
 		return nil, ProjectSlotAttachmentPatchReport{}, err
 	}
-	bySlot := make(map[int][]ProjectSlotAttachmentTimeline)
+	type timelineKey struct {
+		SlotReference     int
+		TimelineReference int
+	}
+	byReference := make(map[timelineKey][]ProjectSlotAttachmentTimeline)
 	for _, timeline := range directory.Timelines {
-		bySlot[timeline.SlotReference] = append(
-			bySlot[timeline.SlotReference],
+		key := timelineKey{
+			SlotReference:     timeline.SlotReference,
+			TimelineReference: timeline.TimelineReference,
+		}
+		byReference[key] = append(
+			byReference[key],
 			timeline,
 		)
 	}
@@ -159,7 +169,7 @@ func PatchProjectSlotAttachmentFrames(
 		RegionEnd:       directory.RegionEnd,
 		Changes:         make([]ProjectSlotAttachmentFrameChange, 0, len(patch.Edits)),
 	}
-	seen := make(map[[2]int]struct{}, len(patch.Edits))
+	seen := make(map[[3]int]struct{}, len(patch.Edits))
 	for editIndex, edit := range patch.Edits {
 		if !finiteProjectFloat(edit.From) || !finiteProjectFloat(edit.To) ||
 			edit.To < 0 {
@@ -172,18 +182,29 @@ func PatchProjectSlotAttachmentFrames(
 			return nil, ProjectSlotAttachmentPatchReport{},
 				fmt.Errorf("edit %d: from and to must differ", editIndex)
 		}
-		selection := [2]int{edit.SlotReference, edit.KeyIndex}
+		selection := [3]int{
+			edit.SlotReference,
+			edit.TimelineReference,
+			edit.KeyIndex,
+		}
 		if _, duplicate := seen[selection]; duplicate {
 			return nil, ProjectSlotAttachmentPatchReport{},
-				fmt.Errorf("edit %d: duplicate slotReference/keyIndex", editIndex)
+				fmt.Errorf(
+					"edit %d: duplicate slotReference/timelineReference/keyIndex",
+					editIndex,
+				)
 		}
 		seen[selection] = struct{}{}
-		matches := bySlot[edit.SlotReference]
+		matches := byReference[timelineKey{
+			SlotReference:     edit.SlotReference,
+			TimelineReference: edit.TimelineReference,
+		}]
 		if len(matches) != 1 {
 			return nil, ProjectSlotAttachmentPatchReport{}, fmt.Errorf(
-				"edit %d: slotReference %d matched %d attachment timelines",
+				"edit %d: slotReference %d timelineReference %d matched %d attachment timelines",
 				editIndex,
 				edit.SlotReference,
+				edit.TimelineReference,
 				len(matches),
 			)
 		}
@@ -210,11 +231,12 @@ func PatchProjectSlotAttachmentFrames(
 			math.Float32bits(edit.To),
 		)
 		report.Changes = append(report.Changes, ProjectSlotAttachmentFrameChange{
-			SlotReference: edit.SlotReference,
-			KeyIndex:      edit.KeyIndex,
-			From:          edit.From,
-			To:            edit.To,
-			Offset:        key.FrameOffset,
+			SlotReference:     edit.SlotReference,
+			TimelineReference: edit.TimelineReference,
+			KeyIndex:          edit.KeyIndex,
+			From:              edit.From,
+			To:                edit.To,
+			Offset:            key.FrameOffset,
 		})
 	}
 	if err := validateProjectSlotAttachmentFrameOrder(payload, directory); err != nil {

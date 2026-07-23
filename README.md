@@ -152,7 +152,13 @@ patched, report, err := spineparser.PatchProjectSlotAttachmentFrames(
 		Animation:       "blink",
 		TargetAnimation: "blink-agent",
 		Edits: []spineparser.ProjectSlotAttachmentFrameEdit{
-			{SlotReference: 14, KeyIndex: 1, From: 16, To: 18},
+			{
+				SlotReference:     14,
+				TimelineReference: 300,
+				KeyIndex:          1,
+				From:              16,
+				To:                18,
+			},
 		},
 	},
 )
