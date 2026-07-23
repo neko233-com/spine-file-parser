@@ -42,8 +42,9 @@ err = os.WriteFile("character-copy.spine", encoded, 0o644)
 patched, report, err := spineparser.PatchProjectAnimationFloat32(
 	document,
 	spineparser.ProjectAnimationFloatPatch{
-		Animation: "attack",
-		EndBefore: "crouch",
+		Animation:       "attack",
+		TargetAnimation: "attack-agent",
+		EndBefore:       "crouch",
 		Edits: []spineparser.ProjectFloat32Edit{
 			{From: 13.22, To: 24, ExpectedMatches: 1},
 		},

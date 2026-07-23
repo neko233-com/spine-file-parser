@@ -18,8 +18,9 @@ func TestPatchProjectAnimationFloat32(t *testing.T) {
 
 	document := &ProjectDocument{Payload: payload}
 	patched, report, err := PatchProjectAnimationFloat32(document, ProjectAnimationFloatPatch{
-		Animation: "attack",
-		EndBefore: "idle",
+		Animation:       "attack",
+		TargetAnimation: "attack-agent",
+		EndBefore:       "idle",
 		Edits: []ProjectFloat32Edit{
 			{From: 13.22, To: 24, ExpectedMatches: 2},
 		},
@@ -35,6 +36,13 @@ func TestPatchProjectAnimationFloat32(t *testing.T) {
 	}
 	if string(patched.Payload) == string(payload) {
 		t.Fatal("patched payload did not change")
+	}
+	if len(patched.Payload) != len(payload)+len("-agent") {
+		t.Fatalf("renamed payload length = %d", len(patched.Payload))
+	}
+	if offsets, err := projectStringOffsets(patched.Payload, "attack-agent"); err != nil ||
+		len(offsets) != 1 {
+		t.Fatalf("target animation offsets = %v, err = %v", offsets, err)
 	}
 	if got := math.Float32frombits(binary.BigEndian.Uint32(
 		patched.Payload[report.Changes[0].Offsets[0]:],

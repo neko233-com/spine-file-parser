@@ -20,9 +20,10 @@ type ProjectFloat32Edit struct {
 // ProjectAnimationFloatPatch bounds low-level edits between two Kryo
 // ASCII-optimized animation names. EndBefore may be empty for the final record.
 type ProjectAnimationFloatPatch struct {
-	Animation string               `json:"animation"`
-	EndBefore string               `json:"endBefore,omitempty"`
-	Edits     []ProjectFloat32Edit `json:"edits"`
+	Animation       string               `json:"animation"`
+	TargetAnimation string               `json:"targetAnimation,omitempty"`
+	EndBefore       string               `json:"endBefore,omitempty"`
+	Edits           []ProjectFloat32Edit `json:"edits"`
 }
 
 // ProjectFloat32Change reports one exact payload edit.
@@ -34,15 +35,16 @@ type ProjectFloat32Change struct {
 
 // ProjectAnimationFloatPatchReport is safe to inspect before serialization.
 type ProjectAnimationFloatPatchReport struct {
-	Animation   string                 `json:"animation"`
-	EndBefore   string                 `json:"endBefore,omitempty"`
-	RegionStart int                    `json:"regionStart"`
-	RegionEnd   int                    `json:"regionEnd"`
-	Changes     []ProjectFloat32Change `json:"changes"`
+	Animation       string                 `json:"animation"`
+	TargetAnimation string                 `json:"targetAnimation,omitempty"`
+	EndBefore       string                 `json:"endBefore,omitempty"`
+	RegionStart     int                    `json:"regionStart"`
+	RegionEnd       int                    `json:"regionEnd"`
+	Changes         []ProjectFloat32Change `json:"changes"`
 }
 
-// PatchProjectAnimationFloat32 clones a project document and applies exact,
-// length-preserving edits. It never mutates document.
+// PatchProjectAnimationFloat32 clones a project document, applies exact
+// float32 edits, and optionally renames the animation. It never mutates document.
 func PatchProjectAnimationFloat32(
 	document *ProjectDocument,
 	patch ProjectAnimationFloatPatch,
@@ -85,7 +87,8 @@ func PatchProjectAnimationFloat32(
 
 	payload := append([]byte(nil), document.Payload...)
 	report := ProjectAnimationFloatPatchReport{
-		Animation: patch.Animation, EndBefore: patch.EndBefore,
+		Animation: patch.Animation, TargetAnimation: patch.TargetAnimation,
+		EndBefore:   patch.EndBefore,
 		RegionStart: start, RegionEnd: end,
 		Changes: make([]ProjectFloat32Change, 0, len(patch.Edits)),
 	}
@@ -130,6 +133,39 @@ func PatchProjectAnimationFloat32(
 			From: edit.From, To: edit.To, Offsets: offsets,
 		})
 	}
+	if strings.TrimSpace(patch.TargetAnimation) != "" &&
+		patch.TargetAnimation != patch.Animation {
+		existing, err := projectStringOffsets(payload, patch.TargetAnimation)
+		if err != nil {
+			return nil, ProjectAnimationFloatPatchReport{}, fmt.Errorf("targetAnimation: %w", err)
+		}
+		if len(existing) != 0 {
+			return nil, ProjectAnimationFloatPatchReport{},
+				fmt.Errorf("target animation already exists: %s", patch.TargetAnimation)
+		}
+		sourceName, err := encodeProjectString(patch.Animation)
+		if err != nil {
+			return nil, ProjectAnimationFloatPatchReport{}, err
+		}
+		targetName, err := encodeProjectString(patch.TargetAnimation)
+		if err != nil {
+			return nil, ProjectAnimationFloatPatchReport{}, err
+		}
+		renamed := make([]byte, 0, len(payload)+len(targetName)-len(sourceName))
+		renamed = append(renamed, payload[:start]...)
+		renamed = append(renamed, targetName...)
+		renamed = append(renamed, payload[start+len(sourceName):]...)
+		delta := len(targetName) - len(sourceName)
+		for changeIndex := range report.Changes {
+			for offsetIndex := range report.Changes[changeIndex].Offsets {
+				if report.Changes[changeIndex].Offsets[offsetIndex] > start {
+					report.Changes[changeIndex].Offsets[offsetIndex] += delta
+				}
+			}
+		}
+		report.RegionEnd += delta
+		payload = renamed
+	}
 
 	result := &ProjectDocument{
 		Inspection: document.Inspection,
@@ -153,6 +189,14 @@ func uniqueProjectStringOffset(payload []byte, value string) (int, error) {
 }
 
 func projectStringOffsets(payload []byte, value string) ([]int, error) {
+	encoded, err := encodeProjectString(value)
+	if err != nil {
+		return nil, err
+	}
+	return findBytesInRange(payload, encoded, 0, len(payload)), nil
+}
+
+func encodeProjectString(value string) ([]byte, error) {
 	if value == "" {
 		return nil, &ParseError{Code: ErrInvalidInput, Msg: "project string is empty"}
 	}
@@ -163,7 +207,7 @@ func projectStringOffsets(payload []byte, value string) ([]int, error) {
 		}
 	}
 	encoded[len(encoded)-1] |= 0x80
-	return findBytesInRange(payload, encoded, 0, len(payload)), nil
+	return encoded, nil
 }
 
 func findBytesInRange(payload, pattern []byte, start, end int) []int {
