@@ -8,12 +8,12 @@ import (
 var projectBoneTablePrefix = []byte{0x0f, 0x01}
 
 // ProjectBoneRecord identifies one bone object in project serialization order.
-// ParentReference is the Kryo reference used by the bone's parent field.
+// ParentToken is the raw Kryo parent object token: null, new object, or ref.
 type ProjectBoneRecord struct {
-	Name            string `json:"name"`
-	Offset          int    `json:"offset"`
-	ParentReference int    `json:"parentReference"`
-	NameEncoding    string `json:"nameEncoding"`
+	Name         string `json:"name"`
+	Offset       int    `json:"offset"`
+	ParentToken  int    `json:"parentToken"`
+	NameEncoding string `json:"nameEncoding"`
 }
 
 // ProjectBoneDirectory contains directly decoded modern project bone names.
@@ -55,7 +55,7 @@ func DiscoverProjectBones(payload []byte) (*ProjectBoneDirectory, error) {
 			classID,
 			count,
 		)
-		if len(records) != count || records[0].ParentReference != 0 ||
+		if len(records) != count || records[0].ParentToken != 0 ||
 			!uniqueProjectBoneNames(records) {
 			continue
 		}
@@ -110,16 +110,16 @@ func scanProjectBoneRecords(
 			offset = recordOffset + 1
 			continue
 		}
-		parentReference, _, ok := readPositiveVarint(payload, afterName+3)
-		if !ok || (len(records) > 0 && parentReference < 1) {
+		parentToken, _, ok := readPositiveVarint(payload, afterName+3)
+		if !ok || (len(records) > 0 && parentToken < 1) {
 			offset = recordOffset + 1
 			continue
 		}
 		records = append(records, ProjectBoneRecord{
-			Name:            name,
-			Offset:          recordOffset,
-			ParentReference: parentReference,
-			NameEncoding:    encoding,
+			Name:         name,
+			Offset:       recordOffset,
+			ParentToken:  parentToken,
+			NameEncoding: encoding,
 		})
 		offset = afterName + 1
 	}

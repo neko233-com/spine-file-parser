@@ -6,7 +6,7 @@ Pure Go Spine 文件库。零第三方依赖，零 Spine Editor 进程依赖。
 - 无损解包/封包 `.spine` raw-DEFLATE payload。
 - fail-closed 修改指定动画记录内大端 float32 关键帧。
 - 自动解析现代 `.spine` 动画表、数量、名称和记录边界。
-- 自动解析现代 `.spine` 骨骼名、对象偏移和父引用。
+- 自动解析现代 `.spine` 骨骼名、对象偏移和原始父对象 token。
 - 语义解析及修改现代 `.spine` rotate/translate/scale/shear 时间线。
 - 解析/序列化 `.skel` header，保留未知 payload。
 - 解析/序列化 Spine JSON，保留未知字段。

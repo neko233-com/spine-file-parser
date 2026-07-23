@@ -26,11 +26,11 @@ func TestDiscoverProjectBones(t *testing.T) {
 		t.Fatalf("directory = %#v", directory)
 	}
 	if directory.Records[0].Name != "root" ||
-		directory.Records[0].ParentReference != 0 ||
+		directory.Records[0].ParentToken != 0 ||
 		directory.Records[1].Name != "body" ||
-		directory.Records[1].ParentReference != 4 ||
+		directory.Records[1].ParentToken != 4 ||
 		directory.Records[2].Name != "hand" ||
-		directory.Records[2].ParentReference != 5 ||
+		directory.Records[2].ParentToken != 5 ||
 		directory.Records[2].NameEncoding != "wrapper-reference" {
 		t.Fatalf("records = %#v", directory.Records)
 	}
