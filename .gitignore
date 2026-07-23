@@ -11,6 +11,10 @@ test-results/
 *.log
 *.tgz
 *.tsbuildinfo
+*.test
+*.out
+vendor/
+bin/
 .env
 .env.*
 !.env.example
