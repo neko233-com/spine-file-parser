@@ -25,6 +25,7 @@ type ProjectTransformKey struct {
 	FrameOffset  int          `json:"frameOffset"`
 	ValueOffsets []int        `json:"valueOffsets"`
 	Curves       [][4]float32 `json:"curves"`
+	CurveOffsets [][4]int     `json:"curveOffsets"`
 	CurveFlags   []byte       `json:"curveFlags"`
 }
 
@@ -97,7 +98,7 @@ func DiscoverProjectTransformTimelines(
 }
 
 // ProjectTransformValueEdit changes one key channel. Channel is frame, value
-// for rotate, or x/y for translate, scale, and shear.
+// for rotate, x/y for vector timelines, or curve.<channel>.<0-3>.
 type ProjectTransformValueEdit struct {
 	BoneReference int     `json:"boneReference"`
 	Timeline      string  `json:"timeline"`
@@ -241,14 +242,32 @@ func PatchProjectTransformValues(
 				return nil, ProjectTransformPatchReport{},
 					fmt.Errorf("edit %d: frame must be non-negative", editIndex)
 			}
-		} else {
-			channelIndex := -1
-			for index, current := range timeline.Channels {
-				if current == channel {
-					channelIndex = index
-					break
-				}
+		} else if strings.HasPrefix(channel, "curve.") {
+			parts := strings.Split(channel, ".")
+			if len(parts) != 3 {
+				return nil, ProjectTransformPatchReport{}, fmt.Errorf(
+					"edit %d: invalid curve channel %q",
+					editIndex,
+					edit.Channel,
+				)
 			}
+			channelIndex := projectTransformChannelIndex(timeline.Channels, parts[1])
+			curveIndex := -1
+			if len(parts[2]) == 1 && parts[2][0] >= '0' && parts[2][0] <= '3' {
+				curveIndex = int(parts[2][0] - '0')
+			}
+			if channelIndex < 0 || curveIndex < 0 {
+				return nil, ProjectTransformPatchReport{}, fmt.Errorf(
+					"edit %d: curve channel %q is invalid for %s",
+					editIndex,
+					edit.Channel,
+					timelineType,
+				)
+			}
+			currentValue = selected.Curves[channelIndex][curveIndex]
+			valueOffset = selected.CurveOffsets[channelIndex][curveIndex]
+		} else {
+			channelIndex := projectTransformChannelIndex(timeline.Channels, channel)
 			if channelIndex < 0 {
 				return nil, ProjectTransformPatchReport{}, fmt.Errorf(
 					"edit %d: channel %q is invalid for %s",
@@ -466,6 +485,7 @@ func readProjectTransformKeys(
 			FrameOffset:  next,
 			ValueOffsets: make([]int, componentCount),
 			Curves:       make([][4]float32, componentCount),
+			CurveOffsets: make([][4]int, componentCount),
 			CurveFlags:   make([]byte, 4*componentCount+1),
 		}
 		for component := 0; component < componentCount; component++ {
@@ -481,10 +501,12 @@ func readProjectTransformKeys(
 		for component := 0; component < componentCount; component++ {
 			curveOffset := curveBase + component*20
 			for curveIndex := 0; curveIndex < 4; curveIndex++ {
+				currentCurveOffset := curveOffset + curveIndex*4
 				key.Curves[component][curveIndex] = readProjectFloat32(
 					payload,
-					curveOffset+curveIndex*4,
+					currentCurveOffset,
 				)
+				key.CurveOffsets[component][curveIndex] = currentCurveOffset
 				if !finiteProjectFloat(key.Curves[component][curveIndex]) {
 					return nil, 0, offset, false
 				}
@@ -511,4 +533,13 @@ func readProjectFloat32(payload []byte, offset int) float32 {
 
 func finiteProjectFloat(value float32) bool {
 	return !math.IsNaN(float64(value)) && !math.IsInf(float64(value), 0)
+}
+
+func projectTransformChannelIndex(channels []string, channel string) int {
+	for index, current := range channels {
+		if current == channel {
+			return index
+		}
+	}
+	return -1
 }

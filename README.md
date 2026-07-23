@@ -87,6 +87,7 @@ patched, report, err := spineparser.PatchProjectRotateValues(
 
 语义修改按骨骼引用、关键帧索引和旧值三重校验；任何结构漂移都会失败。
 `channel: "frame"` 可重定时，且必须保持关键帧严格递增。
+`channel: "curve.x.0"` 等可修改某通道的 4 个原始曲线控制值。
 输入 `document` 永不被修改。
 
 通用骨骼变换：

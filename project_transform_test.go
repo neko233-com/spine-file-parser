@@ -87,13 +87,21 @@ func TestDiscoverAndPatchProjectTransformTimelines(t *testing.T) {
 					From:          4,
 					To:            5,
 				},
+				{
+					BoneReference: 6,
+					Timeline:      ProjectTimelineTranslate,
+					KeyIndex:      1,
+					Channel:       "curve.x.0",
+					From:          float32(1 << 31),
+					To:            1.25,
+				},
 			},
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Changes) != 3 {
+	if len(report.Changes) != 4 {
 		t.Fatalf("report = %#v", report)
 	}
 	rediscovered, err := DiscoverProjectTransformTimelines(
@@ -105,6 +113,7 @@ func TestDiscoverAndPatchProjectTransformTimelines(t *testing.T) {
 	}
 	if rediscovered.Timelines[1].Keys[1].Values[0] != 8 ||
 		rediscovered.Timelines[1].Keys[1].Frame != 5 ||
+		rediscovered.Timelines[1].Keys[1].Curves[0][0] != 1.25 ||
 		rediscovered.Timelines[2].Keys[0].Values[1] != 1.5 {
 		t.Fatalf("rediscovered = %#v", rediscovered.Timelines)
 	}
