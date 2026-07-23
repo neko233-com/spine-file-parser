@@ -56,30 +56,37 @@ func DiscoverProjectRotateTimelines(
 	payload []byte,
 	animation string,
 ) (*ProjectRotateTimelineDirectory, error) {
-	record, err := uniqueProjectAnimationRecord(payload, animation)
+	transforms, err := DiscoverProjectTransformTimelines(payload, animation)
 	if err != nil {
 		return nil, err
 	}
-	groups := discoverProjectBoneTimelineGroups(
-		payload,
-		record.Offset,
-		record.EndOffset,
-	)
 	timelines := make([]ProjectRotateTimeline, 0)
-	for index, group := range groups {
-		groupEnd := record.EndOffset
-		if index+1 < len(groups) {
-			groupEnd = groups[index+1].Offset
+	for _, transform := range transforms.Timelines {
+		if transform.Type != ProjectTimelineRotate {
+			continue
 		}
-		timelines = append(
-			timelines,
-			discoverProjectRotateTimelinesInGroup(
-				payload,
-				group.Offset,
-				groupEnd,
-				group.BoneReference,
-			)...,
-		)
+		keys := make([]ProjectRotateKey, 0, len(transform.Keys))
+		for _, key := range transform.Keys {
+			var flags [5]byte
+			copy(flags[:], key.CurveFlags)
+			keys = append(keys, ProjectRotateKey{
+				Index:       key.Index,
+				Frame:       key.Frame,
+				Time:        key.Time,
+				Value:       key.Values[0],
+				Offset:      key.Offset,
+				ValueOffset: key.ValueOffsets[0],
+				Curve:       key.Curves[0],
+				Flags:       flags,
+			})
+		}
+		timelines = append(timelines, ProjectRotateTimeline{
+			BoneReference:     transform.BoneReference,
+			TimelineReference: transform.TimelineReference,
+			KeyReference:      transform.KeyReference,
+			Offset:            transform.Offset,
+			Keys:              keys,
+		})
 	}
 	if len(timelines) == 0 {
 		return nil, &ParseError{
@@ -89,9 +96,9 @@ func DiscoverProjectRotateTimelines(
 	}
 	return &ProjectRotateTimelineDirectory{
 		Animation:   animation,
-		RegionStart: record.Offset,
-		RegionEnd:   record.EndOffset,
-		FrameRate:   projectAnimationFrameRate,
+		RegionStart: transforms.RegionStart,
+		RegionEnd:   transforms.RegionEnd,
+		FrameRate:   transforms.FrameRate,
 		Timelines:   timelines,
 	}, nil
 }
@@ -322,121 +329,6 @@ func discoverProjectBoneTimelineGroups(
 		offset = cursor + len(projectBoneTimelineMapPrefix) - 1
 	}
 	return groups
-}
-
-func discoverProjectRotateTimelinesInGroup(
-	payload []byte,
-	start int,
-	end int,
-	boneReference int,
-) []ProjectRotateTimeline {
-	timelines := make([]ProjectRotateTimeline, 0, 1)
-	for offset := start; offset+len(projectTimelinePrefix) < end; offset++ {
-		if !bytes.HasPrefix(payload[offset:end], projectTimelinePrefix) {
-			continue
-		}
-		timelineReference, cursor, ok := readPositiveVarint(
-			payload,
-			offset+len(projectTimelinePrefix),
-		)
-		if !ok || cursor+2 >= end {
-			continue
-		}
-		timelineType := payload[cursor]
-		if payload[cursor+1] != 0x01 {
-			continue
-		}
-		keyCount, keyCursor, ok := readPositiveVarint(payload, cursor+2)
-		if !ok || timelineType != 0 || keyCount < 1 || keyCount > 100_000 {
-			continue
-		}
-		keys, keyReference, next, ok := readProjectRotateKeys(
-			payload,
-			keyCursor,
-			end,
-			timelineReference,
-			keyCount,
-		)
-		if !ok {
-			continue
-		}
-		timelines = append(timelines, ProjectRotateTimeline{
-			BoneReference:     boneReference,
-			TimelineReference: timelineReference,
-			KeyReference:      keyReference,
-			Offset:            offset,
-			Keys:              keys,
-		})
-		offset = next - 1
-	}
-	return timelines
-}
-
-func readProjectRotateKeys(
-	payload []byte,
-	offset int,
-	end int,
-	timelineReference int,
-	count int,
-) ([]ProjectRotateKey, int, int, bool) {
-	keys := make([]ProjectRotateKey, 0, count)
-	keyReference := 0
-	cursor := offset
-	for index := 0; index < count; index++ {
-		keyOffset := cursor
-		if cursor+len(projectTimelineKeyPrefix) > end ||
-			!bytes.Equal(
-				payload[cursor:cursor+len(projectTimelineKeyPrefix)],
-				projectTimelineKeyPrefix,
-			) {
-			return nil, 0, offset, false
-		}
-		currentTimelineReference, next, ok := readPositiveVarint(
-			payload,
-			cursor+len(projectTimelineKeyPrefix),
-		)
-		if !ok || currentTimelineReference != timelineReference {
-			return nil, 0, offset, false
-		}
-		currentKeyReference, next, ok := readPositiveVarint(payload, next)
-		if !ok || next+29 > end {
-			return nil, 0, offset, false
-		}
-		if index == 0 {
-			keyReference = currentKeyReference
-		} else if currentKeyReference != keyReference {
-			return nil, 0, offset, false
-		}
-		frame := math.Float32frombits(binary.BigEndian.Uint32(payload[next:]))
-		value := math.Float32frombits(binary.BigEndian.Uint32(payload[next+4:]))
-		if math.IsNaN(float64(frame)) || math.IsInf(float64(frame), 0) ||
-			frame < 0 ||
-			math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
-			return nil, 0, offset, false
-		}
-		key := ProjectRotateKey{
-			Index:       index,
-			Frame:       frame,
-			Time:        frame / projectAnimationFrameRate,
-			Value:       value,
-			Offset:      keyOffset,
-			ValueOffset: next + 4,
-		}
-		for curveIndex := range key.Curve {
-			curveOffset := next + 8 + curveIndex*4
-			key.Curve[curveIndex] = math.Float32frombits(
-				binary.BigEndian.Uint32(payload[curveOffset:]),
-			)
-			if math.IsNaN(float64(key.Curve[curveIndex])) ||
-				math.IsInf(float64(key.Curve[curveIndex]), 0) {
-				return nil, 0, offset, false
-			}
-		}
-		copy(key.Flags[:], payload[next+24:next+29])
-		keys = append(keys, key)
-		cursor = next + 29
-	}
-	return keys, keyReference, cursor, true
 }
 
 func renameProjectAnimationRecord(
