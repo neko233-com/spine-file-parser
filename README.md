@@ -8,6 +8,7 @@ Pure Go Spine 文件库。零第三方依赖，零 Spine Editor 进程依赖。
 - 自动解析现代 `.spine` 动画表、数量、名称和记录边界。
 - 自动解析现代 `.spine` 骨骼名、对象偏移和原始父对象 token。
 - 语义解析及修改现代 `.spine` rotate/translate/scale/shear 时间线。
+- 语义解析及重定时现代 `.spine` slot attachment 时间线。
 - 解析/序列化 `.skel` header，保留未知 payload。
 - 解析/序列化 Spine JSON，保留未知字段。
 - Spine JSON 深度分析、引用验证、动画生成。
@@ -137,6 +138,28 @@ patched, report, err := spineparser.RewriteProjectTransformTimelines(
 	},
 )
 ```
+
+Slot attachment 关键帧：
+
+```go
+timelines, err := spineparser.DiscoverProjectSlotAttachmentTimelines(
+	document.Payload,
+	"blink",
+)
+patched, report, err := spineparser.PatchProjectSlotAttachmentFrames(
+	document,
+	spineparser.ProjectSlotAttachmentPatch{
+		Animation:       "blink",
+		TargetAnimation: "blink-agent",
+		Edits: []spineparser.ProjectSlotAttachmentFrameEdit{
+			{SlotReference: 14, KeyIndex: 1, From: 16, To: 18},
+		},
+	},
+)
+```
+
+Attachment 对象名称引用尚未猜测；当前只安全修改已有 key 的帧，保持对象数量
+和引用不变。
 
 ## `.skel`
 
