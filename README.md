@@ -6,6 +6,7 @@ Pure Go Spine 文件库。零第三方依赖，零 Spine Editor 进程依赖。
 - 无损解包/封包 `.spine` raw-DEFLATE payload。
 - fail-closed 修改指定动画记录内大端 float32 关键帧。
 - 自动解析现代 `.spine` 动画表、数量、名称和记录边界。
+- 语义解析及修改现代 `.spine` rotate 时间线、帧号和值。
 - 解析/序列化 `.skel` header，保留未知 payload。
 - 解析/序列化 Spine JSON，保留未知字段。
 - Spine JSON 深度分析、引用验证、动画生成。
@@ -64,6 +65,27 @@ for _, animation := range directory.Records {
 	fmt.Println(animation.Name, animation.Offset, animation.EndOffset)
 }
 ```
+
+Rotate 时间线：
+
+```go
+timelines, err := spineparser.DiscoverProjectRotateTimelines(
+	document.Payload,
+	"attack",
+)
+patched, report, err := spineparser.PatchProjectRotateValues(
+	document,
+	spineparser.ProjectRotatePatch{
+		Animation:       "attack",
+		TargetAnimation: "attack-agent",
+		Edits: []spineparser.ProjectRotateValueEdit{
+			{BoneReference: 6, KeyIndex: 1, From: 13.22, To: 24},
+		},
+	},
+)
+```
+
+语义修改按骨骼引用、关键帧索引和旧值三重校验；任何结构漂移都会失败。
 输入 `document` 永不被修改。
 
 ## `.skel`
