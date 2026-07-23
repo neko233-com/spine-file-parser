@@ -115,6 +115,28 @@ patched, report, err := spineparser.PatchProjectTransformValues(
 )
 ```
 
+固定拓扑整条重写：
+
+```go
+patched, report, err := spineparser.RewriteProjectTransformTimelines(
+	document,
+	spineparser.ProjectTransformRewrite{
+		Animation:       "attack",
+		TargetAnimation: "attack-agent",
+		Timelines: []spineparser.ProjectTransformTimelineRewrite{
+			{
+				BoneReference: 6,
+				Timeline:      "translate",
+				Keys: []spineparser.ProjectTransformKeySpec{
+					{Frame: 0, Values: []float32{-0.77, -1.89}},
+					{Frame: 5, Values: []float32{8, -0.24}},
+				},
+			},
+		},
+	},
+)
+```
+
 ## `.skel`
 
 ```go

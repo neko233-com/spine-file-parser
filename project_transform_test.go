@@ -3,42 +3,7 @@ package spineparser
 import "testing"
 
 func TestDiscoverAndPatchProjectTransformTimelines(t *testing.T) {
-	payload := append([]byte{}, modernAnimationHeaderPrefix...)
-	payload = append(payload, 0x01)
-	payload = append(payload, modernAnimationHeaderSuffix...)
-	payload = append(payload, 0x09)
-	payload = append(payload, modernAnimationHeaderTail...)
-	payload = append(payload, kryoASCIIForTest("attack")...)
-	payload = append(payload, modernAnimationValuePrefix...)
-	payload = append(payload, projectBoneTimelineGroupPrefix...)
-	payload = appendPositiveVarintForTest(payload, 731)
-	payload = append(payload, 0x01, 0x06)
-	payload = append(payload, projectBoneTimelineMapPrefix...)
-	payload = append(payload, 0x04)
-	payload = appendTransformTimelineForTest(
-		payload,
-		272,
-		0,
-		[][]float32{{0, 2.2}, {2, 13.22}},
-	)
-	payload = appendTransformTimelineForTest(
-		payload,
-		280,
-		1,
-		[][]float32{{0, -0.77, -1.89}, {4, 4.86, -0.24}},
-	)
-	payload = appendTransformTimelineForTest(
-		payload,
-		290,
-		2,
-		[][]float32{{0, 1, 1.1}},
-	)
-	payload = appendTransformTimelineForTest(
-		payload,
-		300,
-		3,
-		[][]float32{{0, 3, 4}},
-	)
+	payload := projectTransformPayloadForTest()
 
 	directory, err := DiscoverProjectTransformTimelines(payload, "attack")
 	if err != nil {
@@ -137,6 +102,47 @@ func TestDiscoverAndPatchProjectTransformTimelines(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-increasing frame error")
 	}
+}
+
+func projectTransformPayloadForTest() []byte {
+	payload := append([]byte{}, modernAnimationHeaderPrefix...)
+	payload = append(payload, 0x01)
+	payload = append(payload, modernAnimationHeaderSuffix...)
+	payload = append(payload, 0x09)
+	payload = append(payload, modernAnimationHeaderTail...)
+	payload = append(payload, kryoASCIIForTest("attack")...)
+	payload = append(payload, modernAnimationValuePrefix...)
+	payload = append(payload, projectBoneTimelineGroupPrefix...)
+	payload = appendPositiveVarintForTest(payload, 731)
+	payload = append(payload, 0x01, 0x06)
+	payload = append(payload, projectBoneTimelineMapPrefix...)
+	payload = append(payload, 0x04)
+	payload = appendTransformTimelineForTest(
+		payload,
+		272,
+		0,
+		[][]float32{{0, 2.2}, {2, 13.22}},
+	)
+	payload = appendTransformTimelineForTest(
+		payload,
+		280,
+		1,
+		[][]float32{{0, -0.77, -1.89}, {4, 4.86, -0.24}},
+	)
+	payload = appendTransformTimelineForTest(
+		payload,
+		290,
+		2,
+		[][]float32{{0, 1, 1.1}},
+	)
+	payload = appendTransformTimelineForTest(
+		payload,
+		300,
+		3,
+		[][]float32{{0, 3, 4}},
+	)
+
+	return payload
 }
 
 func appendTransformTimelineForTest(
