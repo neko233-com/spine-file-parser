@@ -15,9 +15,11 @@ type ProjectTransformKeySpec struct {
 }
 
 // ProjectTransformTimelineRewrite declares every key for one existing
-// transform timeline. Key count and channel count must remain unchanged.
+// transform timeline. A non-empty BoneName must exactly match BoneReference.
+// Key count and channel count must remain unchanged.
 type ProjectTransformTimelineRewrite struct {
 	BoneReference int                       `json:"boneReference"`
+	BoneName      string                    `json:"boneName,omitempty"`
 	Timeline      string                    `json:"timeline"`
 	Keys          []ProjectTransformKeySpec `json:"keys"`
 }
@@ -98,6 +100,24 @@ func RewriteProjectTransformTimelines(
 			)
 		}
 		current := matches[0]
+		if requested.BoneName != "" &&
+			current.BoneName != requested.BoneName {
+			if current.BoneName == "" {
+				return nil, ProjectTransformPatchReport{}, fmt.Errorf(
+					"timeline rewrite %d: boneName %q cannot be proved for boneReference %d",
+					rewriteIndex,
+					requested.BoneName,
+					requested.BoneReference,
+				)
+			}
+			return nil, ProjectTransformPatchReport{}, fmt.Errorf(
+				"timeline rewrite %d: boneName %q does not match boneReference %d (%q)",
+				rewriteIndex,
+				requested.BoneName,
+				requested.BoneReference,
+				current.BoneName,
+			)
+		}
 		if len(requested.Keys) != len(current.Keys) {
 			return nil, ProjectTransformPatchReport{}, fmt.Errorf(
 				"timeline rewrite %d: key count is %d, expected %d",
@@ -138,6 +158,7 @@ func RewriteProjectTransformTimelines(
 				math.Float32bits(existingKey.Frame) {
 				edits = append(edits, ProjectTransformValueEdit{
 					BoneReference: requested.BoneReference,
+					BoneName:      current.BoneName,
 					Timeline:      timelineType,
 					KeyIndex:      keyIndex,
 					Channel:       "frame",
@@ -159,6 +180,7 @@ func RewriteProjectTransformTimelines(
 					math.Float32bits(existingKey.Values[channelIndex]) {
 					edits = append(edits, ProjectTransformValueEdit{
 						BoneReference: requested.BoneReference,
+						BoneName:      current.BoneName,
 						Timeline:      timelineType,
 						KeyIndex:      keyIndex,
 						Channel:       channel,
@@ -185,6 +207,7 @@ func RewriteProjectTransformTimelines(
 					}
 					edits = append(edits, ProjectTransformValueEdit{
 						BoneReference: requested.BoneReference,
+						BoneName:      current.BoneName,
 						Timeline:      timelineType,
 						KeyIndex:      keyIndex,
 						Channel: fmt.Sprintf(

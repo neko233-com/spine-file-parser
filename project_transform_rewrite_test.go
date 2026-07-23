@@ -64,3 +64,68 @@ func TestRewriteProjectTransformTimelinesRejectsTopologyChange(t *testing.T) {
 		t.Fatal("expected key-count error")
 	}
 }
+
+func TestRewriteProjectTransformTimelineBoneNameGuard(t *testing.T) {
+	document := &ProjectDocument{
+		Payload: namedProjectTransformPayloadForTest(false),
+	}
+	_, report, err := RewriteProjectTransformTimelines(
+		document,
+		ProjectTransformRewrite{
+			Animation: "attack",
+			Timelines: []ProjectTransformTimelineRewrite{{
+				BoneReference: 6,
+				BoneName:      "hand",
+				Timeline:      ProjectTimelineTranslate,
+				Keys: []ProjectTransformKeySpec{
+					{Frame: 0, Values: []float32{-0.77, -1.89}},
+					{Frame: 4, Values: []float32{8, -0.24}},
+				},
+			}},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Changes) != 1 || report.Changes[0].BoneName != "hand" {
+		t.Fatalf("report = %#v", report)
+	}
+
+	for _, test := range []struct {
+		name    string
+		payload []byte
+		bone    string
+	}{
+		{
+			name:    "mismatch",
+			payload: namedProjectTransformPayloadForTest(false),
+			bone:    "body",
+		},
+		{
+			name:    "incomplete mapping",
+			payload: namedProjectTransformPayloadForTest(true),
+			bone:    "hand",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, err := RewriteProjectTransformTimelines(
+				&ProjectDocument{Payload: test.payload},
+				ProjectTransformRewrite{
+					Animation: "attack",
+					Timelines: []ProjectTransformTimelineRewrite{{
+						BoneReference: 6,
+						BoneName:      test.bone,
+						Timeline:      ProjectTimelineTranslate,
+						Keys: []ProjectTransformKeySpec{
+							{Frame: 0, Values: []float32{-0.77, -1.89}},
+							{Frame: 4, Values: []float32{8, -0.24}},
+						},
+					}},
+				},
+			)
+			if err == nil {
+				t.Fatal("expected bone name guard error")
+			}
+		})
+	}
+}

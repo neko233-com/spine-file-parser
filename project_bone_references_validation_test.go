@@ -91,6 +91,23 @@ func TestProjectBoneReferencesAgainstOfficialSamples(t *testing.T) {
 						)
 					}
 				}
+				timelines := projectTransformTimelinesForRecord(
+					payload,
+					animation,
+				)
+				populateProjectTransformBoneNames(payload, timelines)
+				for _, timeline := range timelines {
+					expected := byReference[timeline.BoneReference]
+					if expected == "" || timeline.BoneName != expected {
+						t.Fatalf(
+							"animation %q ref %d resolved boneName %q, expected %q",
+							animation.Name,
+							timeline.BoneReference,
+							timeline.BoneName,
+							expected,
+						)
+					}
+				}
 			}
 			if examplesRoot != "" {
 				transformCount = validateProjectBoneNamesAgainstExport(

@@ -118,6 +118,7 @@ patched, report, err := spineparser.PatchProjectTransformValues(
 		Edits: []spineparser.ProjectTransformValueEdit{
 			{
 				BoneReference: 6,
+				BoneName:      "body",
 				Timeline:      "translate",
 				KeyIndex:      1,
 				Channel:       "x",
@@ -140,6 +141,7 @@ patched, report, err := spineparser.RewriteProjectTransformTimelines(
 		Timelines: []spineparser.ProjectTransformTimelineRewrite{
 			{
 				BoneReference: 6,
+				BoneName:      "body",
 				Timeline:      "translate",
 				Keys: []spineparser.ProjectTransformKeySpec{
 					{Frame: 0, Values: []float32{-0.77, -1.89}},
@@ -150,6 +152,9 @@ patched, report, err := spineparser.RewriteProjectTransformTimelines(
 	},
 )
 ```
+
+非空 `BoneName` 与 `BoneReference` 会被双重校验；无法证明映射或名称不一致时
+立即失败。留空仅用于兼容底层 ref-only 调用。
 
 Slot attachment 关键帧：
 

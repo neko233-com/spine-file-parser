@@ -30,11 +30,13 @@ type ProjectTransformKey struct {
 }
 
 // ProjectTransformTimeline identifies a rotate, translate, scale, or shear
-// timeline by the project's stable Kryo bone reference.
+// timeline by the project's stable Kryo bone reference. BoneName is populated
+// only when the project bone object graph proves the corresponding name.
 type ProjectTransformTimeline struct {
 	Type              string                `json:"type"`
 	Channels          []string              `json:"channels"`
 	BoneReference     int                   `json:"boneReference"`
+	BoneName          string                `json:"boneName,omitempty"`
 	TimelineReference int                   `json:"timelineReference"`
 	KeyReference      int                   `json:"keyReference"`
 	Offset            int                   `json:"offset"`
@@ -82,6 +84,7 @@ func DiscoverProjectTransformTimelines(
 			)...,
 		)
 	}
+	populateProjectTransformBoneNames(payload, timelines)
 	if len(timelines) == 0 {
 		return nil, &ParseError{
 			Code: ErrInvalidProject,
@@ -97,10 +100,12 @@ func DiscoverProjectTransformTimelines(
 	}, nil
 }
 
-// ProjectTransformValueEdit changes one key channel. Channel is frame, value
+// ProjectTransformValueEdit changes one key channel. A non-empty BoneName is
+// an additional exact-match guard for BoneReference. Channel is frame, value
 // for rotate, x/y for vector timelines, or curve.<channel>.<0-3>.
 type ProjectTransformValueEdit struct {
 	BoneReference int     `json:"boneReference"`
+	BoneName      string  `json:"boneName,omitempty"`
 	Timeline      string  `json:"timeline"`
 	KeyIndex      int     `json:"keyIndex"`
 	Channel       string  `json:"channel"`
@@ -119,6 +124,7 @@ type ProjectTransformPatch struct {
 // ProjectTransformValueChange reports one semantic channel edit.
 type ProjectTransformValueChange struct {
 	BoneReference int     `json:"boneReference"`
+	BoneName      string  `json:"boneName,omitempty"`
 	Timeline      string  `json:"timeline"`
 	KeyIndex      int     `json:"keyIndex"`
 	Channel       string  `json:"channel"`
@@ -226,6 +232,23 @@ func PatchProjectTransformValues(
 			)
 		}
 		timeline := matches[0]
+		if edit.BoneName != "" && timeline.BoneName != edit.BoneName {
+			if timeline.BoneName == "" {
+				return nil, ProjectTransformPatchReport{}, fmt.Errorf(
+					"edit %d: boneName %q cannot be proved for boneReference %d",
+					editIndex,
+					edit.BoneName,
+					edit.BoneReference,
+				)
+			}
+			return nil, ProjectTransformPatchReport{}, fmt.Errorf(
+				"edit %d: boneName %q does not match boneReference %d (%q)",
+				editIndex,
+				edit.BoneName,
+				edit.BoneReference,
+				timeline.BoneName,
+			)
+		}
 		if edit.KeyIndex < 0 || edit.KeyIndex >= len(timeline.Keys) {
 			return nil, ProjectTransformPatchReport{}, fmt.Errorf(
 				"edit %d: keyIndex %d is outside [0,%d)",
@@ -293,6 +316,7 @@ func PatchProjectTransformValues(
 		)
 		report.Changes = append(report.Changes, ProjectTransformValueChange{
 			BoneReference: edit.BoneReference,
+			BoneName:      timeline.BoneName,
 			Timeline:      timelineType,
 			KeyIndex:      edit.KeyIndex,
 			Channel:       channel,
@@ -330,6 +354,24 @@ func PatchProjectTransformValues(
 		Inspection: document.Inspection,
 		Payload:    payload,
 	}, report, nil
+}
+
+func populateProjectTransformBoneNames(
+	payload []byte,
+	timelines []ProjectTransformTimeline,
+) {
+	bones, err := DiscoverProjectBones(payload)
+	if err != nil {
+		return
+	}
+	for index := range timelines {
+		name, ok := bones.BoneNameByWireReference(
+			timelines[index].BoneReference,
+		)
+		if ok {
+			timelines[index].BoneName = name
+		}
+	}
 }
 
 func validateProjectTransformFrameOrder(

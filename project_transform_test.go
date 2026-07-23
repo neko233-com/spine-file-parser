@@ -104,6 +104,115 @@ func TestDiscoverAndPatchProjectTransformTimelines(t *testing.T) {
 	}
 }
 
+func TestProjectTransformBoneNameGuard(t *testing.T) {
+	payload := namedProjectTransformPayloadForTest(false)
+	directory, err := DiscoverProjectTransformTimelines(payload, "attack")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, timeline := range directory.Timelines {
+		if timeline.BoneReference != 6 || timeline.BoneName != "hand" {
+			t.Fatalf("timeline bone identity = %#v", timeline)
+		}
+	}
+
+	document := &ProjectDocument{Payload: payload}
+	_, report, err := PatchProjectTransformValues(
+		document,
+		ProjectTransformPatch{
+			Animation: "attack",
+			Edits: []ProjectTransformValueEdit{{
+				BoneReference: 6,
+				BoneName:      "hand",
+				Timeline:      ProjectTimelineTranslate,
+				KeyIndex:      1,
+				Channel:       "x",
+				From:          4.86,
+				To:            8,
+			}},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Changes) != 1 || report.Changes[0].BoneName != "hand" {
+		t.Fatalf("report = %#v", report)
+	}
+
+	_, _, err = PatchProjectTransformValues(
+		document,
+		ProjectTransformPatch{
+			Animation: "attack",
+			Edits: []ProjectTransformValueEdit{{
+				BoneReference: 6,
+				BoneName:      "body",
+				Timeline:      ProjectTimelineTranslate,
+				KeyIndex:      1,
+				Channel:       "x",
+				From:          4.86,
+				To:            8,
+			}},
+		},
+	)
+	if err == nil {
+		t.Fatal("expected bone name/reference mismatch")
+	}
+}
+
+func TestProjectTransformBoneNameIncompleteMapping(t *testing.T) {
+	payload := namedProjectTransformPayloadForTest(true)
+	directory, err := DiscoverProjectTransformTimelines(payload, "attack")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, timeline := range directory.Timelines {
+		if timeline.BoneName != "" {
+			t.Fatalf("unproved bone name was exposed: %#v", timeline)
+		}
+	}
+
+	document := &ProjectDocument{Payload: payload}
+	_, _, err = PatchProjectTransformValues(
+		document,
+		ProjectTransformPatch{
+			Animation: "attack",
+			Edits: []ProjectTransformValueEdit{{
+				BoneReference: 6,
+				BoneName:      "hand",
+				Timeline:      ProjectTimelineTranslate,
+				KeyIndex:      1,
+				Channel:       "x",
+				From:          4.86,
+				To:            8,
+			}},
+		},
+	)
+	if err == nil {
+		t.Fatal("expected unproved bone name rejection")
+	}
+
+	_, report, err := PatchProjectTransformValues(
+		document,
+		ProjectTransformPatch{
+			Animation: "attack",
+			Edits: []ProjectTransformValueEdit{{
+				BoneReference: 6,
+				Timeline:      ProjectTimelineTranslate,
+				KeyIndex:      1,
+				Channel:       "x",
+				From:          4.86,
+				To:            8,
+			}},
+		},
+	)
+	if err != nil {
+		t.Fatalf("ref-only compatibility: %v", err)
+	}
+	if len(report.Changes) != 1 || report.Changes[0].BoneName != "" {
+		t.Fatalf("unproved report name = %#v", report)
+	}
+}
+
 func projectTransformPayloadForTest() []byte {
 	payload := append([]byte{}, modernAnimationHeaderPrefix...)
 	payload = append(payload, 0x01)
@@ -143,6 +252,26 @@ func projectTransformPayloadForTest() []byte {
 	)
 
 	return payload
+}
+
+func namedProjectTransformPayloadForTest(
+	contradictBoneReferences bool,
+) []byte {
+	payload := []byte{0x55}
+	payload = append(payload, projectBoneTablePrefix...)
+	payload = append(payload, 0x03, 0x0c)
+	payload = append(payload, projectBoneRecordForReferenceTest("root", 0)...)
+	payload = append(payload, 0x7e, 0x00, 0x0c)
+	payload = append(payload, projectBoneRecordForReferenceTest("body", 4)...)
+	payload = append(payload, 0x7e, 0x00, 0x0c)
+	payload = append(payload, projectBoneRecordForReferenceTest("hand", 5)...)
+	payload = append(payload, 0x7e, 0x00)
+	if contradictBoneReferences {
+		payload = append(payload, projectSlotRecordPrefix...)
+		payload = append(payload, kryoASCIIForTest("contradiction")...)
+		payload = append(payload, 0x02, 0x63)
+	}
+	return append(payload, projectTransformPayloadForTest()...)
 }
 
 func appendTransformTimelineForTest(
